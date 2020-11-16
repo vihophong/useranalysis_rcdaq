@@ -12,6 +12,7 @@
 #include <TCanvas.h>
 #include <TF1.h>
 #include <TRandom.h>
+#include <TROOT.h>
 #include <TGButton.h>
 #include <TRootEmbeddedCanvas.h>
 #include <iostream>
