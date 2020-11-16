@@ -9,12 +9,13 @@
 #include <RQ_OBJECT.h>
 #include <TH1.h>
 
-int process_event (Event *e); //++CINT 
-int pstop();
-
 class TGWindow;
 class TGMainFrame;
 class TRootEmbeddedCanvas;
+class MyMainFrame;
+
+int process_event (Event *e); //++CINT
+int pstop();
 
 class MyMainFrame {
    RQ_OBJECT("MyMainFrame")
@@ -31,7 +32,10 @@ public:
    void DoDAQConfig();
    void StopOnline();
    void ResumeOnline();
+   ClassDef (MyMainFrame,0);
 };
+
+
 
 
 #endif /* __MYANALYSIS_H__ */

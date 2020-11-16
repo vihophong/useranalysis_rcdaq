@@ -30,8 +30,8 @@ link_directories($ENV{ONLINE_MAIN}/lib)
 #add_library(mainframe SHARED ${PROJECT_SOURCE_DIR}/src/mainframe.cc ${PROJECT_SOURCE_DIR}/include/mainframe.h  G__mainframe.cxx)
 #target_link_libraries(mainframe ${ROOT_LIBRARIES})
 
-ROOT_GENERATE_DICTIONARY(G__libmyanalysis ${PROJECT_SOURCE_DIR}/include/myanalysis.h LINKDEF ${PROJECT_SOURCE_DIR}/include/myanalysisLinkDef.h)
-add_library(myanalysis SHARED ${sources} ${headers}  G__libmyanalysis.cxx)
+ROOT_GENERATE_DICTIONARY(G__myanalysis ${PROJECT_SOURCE_DIR}/include/myanalysis.h LINKDEF ${PROJECT_SOURCE_DIR}/include/myanalysisLinkDef.hh)
+add_library(myanalysis SHARED ${sources} ${headers}  G__myanalysis.cxx)
 target_link_libraries(myanalysis pmonitor Event NoRootEvent message)
 target_link_libraries(myanalysis ${ROOT_LIBRARIES})
 

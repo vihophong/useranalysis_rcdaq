@@ -42,7 +42,6 @@ Int_t ch_ecal1[8];
 
 int pinit()
 {
-
     if (init_done) return 1;
     init_done = 1;
 
@@ -90,7 +89,8 @@ int pinit()
     h2->Draw("colz");
 
 
-    new MyMainFrame(gClient->GetRoot(),200,200);    
+
+    new MyMainFrame(gClient->GetRoot(),200,200);
     return 0;
 }
 
