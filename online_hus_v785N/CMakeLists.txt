@@ -44,7 +44,6 @@ target_link_libraries(myanalysis ${ROOT_LIBRARIES})
 set(PROJ_DATA
   channel_calib.ods
   channel_calib.txt
-  source.sh
   daqconfig1.sh
   daqmonitor.C
   )
