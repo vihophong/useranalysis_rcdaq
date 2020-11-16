@@ -1,1 +1,1 @@
-# useranalysis_rcdaq
+Collection of user analysis codes
