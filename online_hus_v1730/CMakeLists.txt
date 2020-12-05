@@ -26,16 +26,14 @@ file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.h)
 link_directories($ENV{ONLINE_MAIN}/lib)
 
 #---Create a shared library with geneated dictionary
-ROOT_GENERATE_DICTIONARY(G__mainframe ${PROJECT_SOURCE_DIR}/include/MyMainFrame.h LINKDEF ${PROJECT_SOURCE_DIR}/include/MyMainFrameLinkDef.hh)
-add_library(mainframe SHARED ${PROJECT_SOURCE_DIR}/src/MyMainFrame.cc ${PROJECT_SOURCE_DIR}/include/MyMainFrame.h  G__mainframe.cxx)
-target_link_libraries(mainframe ${ROOT_LIBRARIES})
+ROOT_GENERATE_DICTIONARY(G__libDataStruct ${PROJECT_SOURCE_DIR}/include/libDataStruct.h LINKDEF ${PROJECT_SOURCE_DIR}/include/libDataStructLinkDef.h)
+add_library(DataStruct SHARED ${PROJECT_SOURCE_DIR}/include/libDataStruct.h  G__libDataStruct.cxx)
+target_link_libraries(DataStruct pmonitor Event NoRootEvent message)
+target_link_libraries(DataStruct ${ROOT_LIBRARIES})
 
-ROOT_GENERATE_DICTIONARY(G__myanalysis ${PROJECT_SOURCE_DIR}/include/myanalysis.h LINKDEF ${PROJECT_SOURCE_DIR}/include/myanalysisLinkDef.hh)
-add_library(myanalysis SHARED ${PROJECT_SOURCE_DIR}/src/myanalysis.cc ${headers}  G__myanalysis.cxx)
-target_link_libraries(myanalysis mainframe)
-target_link_libraries(myanalysis pmonitor Event NoRootEvent message)
-
-
+ROOT_GENERATE_DICTIONARY(G__myanalysis ${PROJECT_SOURCE_DIR}/include/pdecoder.h LINKDEF ${PROJECT_SOURCE_DIR}/include/pdecoderLinkDef.h)
+add_library(myanalysis SHARED ${sources} ${headers}  G__myanalysis.cxx)
+target_link_libraries(myanalysis DataStruct)
 
 
 #----------------------------------------------------------------------------

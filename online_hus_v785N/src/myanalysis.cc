@@ -20,25 +20,31 @@
 #include<stdlib.h>
 #include<string.h>
 
+#include "TTimer.h"
+#include "MyMainFrame.h"
 //#define DEBUG
 
 #define TDC_PACKET 10
 
 #define COUNTS_TO_UPDATE 1
-int init_done = 0;
+
+
+#define OVER_FLOW 4096
+
 
 using namespace std;
 
-TCanvas* c1;
-TCanvas* c2;
-Int_t c1updatetrgcnt;
+int init_done = 0;
+
+MyMainFrame* mf;
 TH1F *h1;
-TH1F *hadc[8];
+TH1F *h1tmp;
+TH1F *hadc[MAX_N_CH];
 TH2F *h2;
 
-Int_t ch_thr[8];
-Int_t ch_ecal0[8];
-Int_t ch_ecal1[8];
+Int_t ch_thr[MAX_N_CH];
+Int_t ch_ecal0[MAX_N_CH];
+Int_t ch_ecal1[MAX_N_CH];
 
 int pinit()
 {
@@ -65,32 +71,26 @@ int pinit()
         mm++;
       }
 
-    c1updatetrgcnt=0;
-
-    h1 = new TH1F ( "h1","histogram of total counts", 10, 0, 10);
-    for (Int_t i=0;i<8;i++)
+    h1 = new TH1F ( "h1","channel rate", MAX_N_CH, 0, MAX_N_CH);
+    h1tmp = new TH1F ( "h1tmp","histogram of total counts (for rate calculation)", MAX_N_CH, 0, MAX_N_CH);
+    for (Int_t i=0;i<MAX_N_CH;i++)
         hadc[i]=new TH1F (Form("hadc%d",i),Form("Channel %d ADC spectrum",i), 5000, 0, 5000);
-    h2 = new TH2F ( "h2","All channels: E vs ch",10,0,10,5000, 0, 5000);
+    h2 = new TH2F ( "h2","All channels: E vs ch",MAX_N_CH,0,MAX_N_CH,5000, 0, 5000);
 
-
-    c1=new TCanvas("c1","c1",1200,1200);
-    c1->Divide(2,4);
-    for (Int_t i=0;i<8;i++){
-        c1->cd(i+1);
+    mf=new MyMainFrame(gClient->GetRoot(),200,200);
+    mf->GetC1()->Divide(N_CH_PLOT_H,N_CH_PLOT_V);
+    for (Int_t i=0;i<N_CH_PLOT;i++){
+        mf->GetC1()->cd(i+1);
         hadc[i]->Draw();
     }
 
-    c2=new TCanvas("rate","rate",900,600);
-    c2->Divide(1,2);
-    c2->cd(1);
+    mf->GetC2()->Divide(1,2);
+    mf->GetC2()->cd(1);
     h1->SetFillColor(2);
     h1->Draw();
-    c2->cd(2);
+    mf->GetC2()->cd(2);
     h2->Draw("colz");
 
-
-
-    new MyMainFrame(gClient->GetRoot(),200,200);
     return 0;
 }
 
@@ -102,201 +102,74 @@ int process_event (Event * e)
         int* gg;
         gg=(int*) tdcp->getIntArray(temp);
         int size=tdcp->getPadding();
-        //data->Clear();
-        //data->evt_type = TDC_EVENT_TYPE;
-        //data->b = TDC_BOARD_N;
-        //data->ch = 0;
-        UInt_t tslsb = (UInt_t)gg[3];
-        UInt_t tsmsb = (UInt_t)gg[2];
-        //data->ts = (((ULong64_t)tsmsb<<32)&0xFFFF00000000)|(ULong64_t)tslsb;//resolution is 16 ns!
-        int ncounter= gg[1];
-        //data->clong= gg[1];//daq counter
-        //data->evt = gg[0];
-        //! more tdc data here!
-        int nwordtdc = 0;
-        //cout<<"EVENT BEGIN"<<endl;
+        int last_daq_ncounter= gg[1];
+        int last_daq_blkcounter = gg[0];
+        int now_daq_ncounter=0;
 
-        bool flag_trailer = false;
-        bool flag_endofv1190 = false;
-        bool flag_v792counter = false;
+        bool flag_end_v792counter = false;
         int nwordqdc = 0;
         int lastcounter=0;
+
+        bool flag_not_valid_dantum = false;
+
+        int nadcdatum=0;
         for (int i=4;i<size;i++){
-            if((gg[i]&0xF8000000)>>27==0x12){
-#ifdef DEBUG
-                cout<<"Separation bit met"<<gg[i]<<endl;
-#endif
-                flag_endofv1190 = true;
-                //break;
-            }
             if((gg[i]&0xF8000000)>>27==0x13){
 #ifdef DEBUG
                 cout<<std::hex<<"Separation bit counter met 0x"<<gg[i]<<std::dec<<endl;
 #endif
-                flag_v792counter=true;
+                flag_end_v792counter=true;
                 //break;
             }
-            if (!flag_v792counter&&flag_endofv1190&&(gg[i]&0xF8000000)>>27==0x1F){
+            if (!flag_end_v792counter){//data bit of V726
                 //! read qdc      
 #ifdef DEBUG
-                cout<<"qdc bit"<<std::hex<<"0x"<<((gg[i]&0x7000000)>>24)<<" - 0x"<<gg[i]<<std::dec<<" ch="<<((gg[i]&0x1C0000)>>18)<<" - range"<<((gg[i]&0x20000)>>17)<<" - adc"<<(gg[i]&0xFFF)<<endl;
+                cout<<"qdc bit"<<std::hex<<"0x"<<((gg[i]&0x7000000)>>24)<<" - 0x"<<gg[i]<<std::dec<<" ch="<<((gg[i]>>16)&0x1F)<<" - adc"<<(gg[i]&0xFFF)<<endl;
 #endif
-                if (((gg[i]&0x7000000)>>24)==0x2){//Header met
-                    //int qdcnmemorisech=(int)((gg[i]&0x3F00)>>8);
-                    //cout<<qdcnmemorisech<<endl;
-                }else if(((gg[i]&0x7000000)>>24)==0x0){
-                    int qdcch = ((gg[i]&0x1C0000)>>18);
+                if (((gg[i]&0x7000000)>>24)==0x2){//Header met                    
+                    int qdcnmemorisech=(int)((gg[i]&0x3F00)>>8);
+#ifdef DEBUG
+                    cout<<"QDC memoriesed channels: "<<qdcnmemorisech<<endl;
+#endif
+                }else if((!flag_not_valid_dantum)&&(((gg[i]&0x7000000)>>24)==0x0)){
+#ifdef DEBUG
+                cout<<"WRITE QDC: qdc bit"<<std::hex<<"0x"<<((gg[i]&0x7000000)>>24)<<" - 0x"<<gg[i]<<std::dec<<" ch="<<((gg[i]>>16)&0x1F)<<" - adc"<<(gg[i]&0xFFF)<<endl;
+#endif
+                    int qdcch = (gg[i]>>16)&0x1F;
                     int qdcdata =(gg[i]&0xFFF);
-                    int range=((gg[i]&0x20000)>>17);                    
-                    if (range==0) {
-                        double ecal=qdcdata*ch_ecal1[qdcch]+ch_ecal0[qdcch];
-                        h2->Fill(qdcch,ecal);
-                        if (qdcdata>ch_thr[qdcch]) h1->Fill(qdcch);
-                        hadc[qdcch]->Fill(ecal);
+                    double ecal=qdcdata*ch_ecal1[qdcch]+ch_ecal0[qdcch];
+                    h2->Fill(qdcch,ecal);
+                    if (qdcdata>ch_thr[qdcch]&&qdcdata<OVER_FLOW-10) {
+                        h1tmp->Fill(qdcch);
                     }
-                    if (range==0) {
-                        if (c1updatetrgcnt>COUNTS_TO_UPDATE){
-                            for (int ch=0;ch<8;ch++){
-                                c1->cd(ch+1)->Modified();
-                                c1->cd(ch+1)->Update();
-                            }
-                            c2->cd(1)->Modified();
-                            c2->cd(1)->Update();
-                            c2->cd(2)->Modified();
-                            c2->cd(2)->Update();
-                            c1updatetrgcnt=0;
-                        }
-                        if (qdcdata>ch_thr[qdcch]) c1updatetrgcnt++;
-                    }
-                    //data->AddQDCHit(qdcch,qdcdata);
-                    //cout<<qdcch<<"-"<<qdcdata<<endl;
+                    hadc[qdcch]->Fill(ecal);
+                    nadcdatum++;
                 }else if (((gg[i]&0x7000000)>>24)==0x4){//end of qdc block met
-                    int qdcevtcounter = gg[i]&0x7FFFFF;
-                    //cout<<ncounter<<" / "<<qdcevtcounter<<" deadtime(BLT) = "<<100-(Double_t)ncounter/(Double_t)qdcevtcounter*100<<" %"<<endl;
+                    int qdcevtcounter = gg[i]&0xFFFFFF;
                     lastcounter = qdcevtcounter;
+#ifdef DEBUG
+                    cout<<"END of Event No. = "<<qdcevtcounter<<endl;
+#endif
                 }else if (((gg[i]&0x7000000)>>24)==0x6){
+                    flag_not_valid_dantum=true;
+#ifdef DEBUG
                     //cout<<"empty buffer read"<<endl;
-                }else{
-                    cout<<"Something wrong with QDC?"<<((gg[i]&0x7000000)>>24)<<endl;
+#endif
                 }
                 nwordqdc++;
             }
-            if (flag_v792counter&&((gg[i]&0xF8000000)>>27!=0x13)){
-                //cout<<gg[i]<<" / "<<lastcounter<<" deadtime(MBLT) = "<<100-(Double_t)gg[i]/(Double_t)lastcounter*100<<" %"<<endl;
+            if ((gg[i]&0xF8000000)>>27!=0x13&&flag_end_v792counter){
+                now_daq_ncounter=gg[i];
+#ifdef DEBUG
+                cout<<"END of Block, DAQ counter = "<<now_daq_ncounter<<endl;
+#endif
             }
         }
+#ifdef DEBUG
+        if (nadcdatum<5) cout<<"Invalid dantum!"<<nadcdatum<<endl;
+#endif
         //cout<<"EVENT END "<<nwordqdc<<endl;
         delete tdcp;
     }
     return 0;
 }
-
-MyMainFrame::MyMainFrame(const TGWindow *p,UInt_t w,UInt_t h) {
-    // Create a main frame
-    fMain = new TGMainFrame(p,w,h);
-
-    // Create a horizontal frame widget with buttons
-    TGHorizontalFrame *hframe = new TGHorizontalFrame(fMain,900,20);
-    TGTextButton *daqconfigbtn = new TGTextButton(hframe,"&Config DAQ");
-    daqconfigbtn->Connect("Clicked()","MyMainFrame",this,"DoDAQConfig()");
-    hframe->AddFrame(daqconfigbtn, new TGLayoutHints(kLHintsCenterX,
-                                                   5,5,3,4));
-    TGTextButton *daqopenbtn = new TGTextButton(hframe,"&Open File");
-    daqopenbtn->Connect("Clicked()","MyMainFrame",this,"DoOpenDAQ()");
-    hframe->AddFrame(daqopenbtn, new TGLayoutHints(kLHintsCenterX,
-                                                   5,5,3,4));
-    TGTextButton *daqbeginbtn = new TGTextButton(hframe,"&Begin Run");
-    daqbeginbtn->Connect("Clicked()","MyMainFrame",this,"DoBeginDAQ()");
-    hframe->AddFrame(daqbeginbtn, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-    TGTextButton *daqendbtn = new TGTextButton(hframe,"&End Run");
-    daqendbtn->Connect("Clicked()","MyMainFrame",this,"DoEndDAQ()");
-    hframe->AddFrame(daqendbtn, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-    TGTextButton *exit = new TGTextButton(hframe,"&Exit",
-                                 "gApplication->Terminate(0)");
-    hframe->AddFrame(exit, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-    fMain->AddFrame(hframe, new TGLayoutHints(kLHintsCenterX,
-                                              2,2,2,2));
-    // Create canvas widget
-//    fEcanvas = new TRootEmbeddedCanvas("Ecanvas",fMain,900,700);
-//    fMain->AddFrame(fEcanvas, new TGLayoutHints(kLHintsExpandX |
-//                    kLHintsExpandY, 10,10,10,1));
-
-    // Create bottom frame for reset button
-    TGHorizontalFrame *hframe2 = new TGHorizontalFrame(fMain,900,20);
-    TGTextButton *resetbtn = new TGTextButton(hframe2,"&Clear Histograms");
-    resetbtn->Connect("Clicked()","MyMainFrame",this,"DoReset()");
-    hframe2->AddFrame(resetbtn, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-    TGTextButton *stoponlinebtn = new TGTextButton(hframe2,"&Pause Online");
-    stoponlinebtn->Connect("Clicked()","MyMainFrame",this,"StopOnline()");
-    hframe2->AddFrame(stoponlinebtn, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-    TGTextButton *resumeonlinebtn = new TGTextButton(hframe2,"&Resume Online");
-    resumeonlinebtn->Connect("Clicked()","MyMainFrame",this,"ResumeOnline()");
-    hframe2->AddFrame(resumeonlinebtn, new TGLayoutHints(kLHintsCenterX,
-                                             5,5,3,4));
-
-    fMain->AddFrame(hframe2, new TGLayoutHints(kLHintsCenterX,
-                                              2,2,2,2));
-
-    // Set a name to the main frame
-    fMain->SetWindowName("DAQ");
-
-    // Map all subwindows of main frame
-    fMain->MapSubwindows();
-
-    // Initialize the layout algorithm
-    fMain->Resize(fMain->GetDefaultSize());
-
-    // Map main frame
-    fMain->MapWindow();
-
-//    TCanvas *c1 = fEcanvas->GetCanvas();
-//    c1->Divide(2,4);
-//    for (Int_t i=0;i<8;i++) {
-//        c1->cd(i+1);
-//        hadc[i]->Draw();
-//    }
-}
-MyMainFrame::~MyMainFrame() {
-    // Clean up used widgets: frames, buttons, layout hints
-    fMain->Cleanup();
-    delete fMain;
-}
-void MyMainFrame::DoReset() {
-    for (Int_t i=0;i<8;i++)
-        hadc[i]->Reset();
-    h1->Reset();
-    h2->Reset();
-}
-
-void MyMainFrame::StopOnline() {
-    gROOT->ProcessLine("pstop()");
-}
-void MyMainFrame::ResumeOnline(){
-    gROOT->ProcessLine("pstart()");
-}
-
-void MyMainFrame::DoBeginDAQ() {
-    system("rcdaq_client daq_begin");
-}
-void MyMainFrame::DoEndDAQ() {
-    system("rcdaq_client daq_end");
-}
-void MyMainFrame::DoOpenDAQ() {
-    system("rcdaq_client daq_open");
-}
-void MyMainFrame::DoDAQConfig() {
-    system("./daqconfig1.sh");
-}
-
-//void MyMainFrame::WriteLLDValueForV1785()
-//{
-//    Write_reg(0x1034,0x100);
-//    for (uint32_t i=0;i<16;i++) {
-//        Write_reg(0x1080 +i*4,fLLDValue/16);
-//    }
-//}
