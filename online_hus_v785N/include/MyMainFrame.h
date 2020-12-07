@@ -14,12 +14,17 @@
 #include <TGText.h>
 #include <TGLabel.h>
 #include <TGStatusBar.h>
+#include <TGListBox.h>
+#include <TLegend.h>
 
+#include <string>
 
 #define MAX_N_CH 32
 #define N_CH_PLOT 8
 #define N_CH_PLOT_H 2
 #define N_CH_PLOT_V 4
+
+//#define SLOW_ONLINE 100000
 
 class TGWindow;
 class TGMainFrame;
@@ -30,9 +35,15 @@ class MyMainFrame {
    RQ_OBJECT("MyMainFrame")
 private:
    TGMainFrame         *fMain;
+   TGMainFrame         *fMain1;
+   TGMainFrame         *fMain2;
    TRootEmbeddedCanvas *fEcanvas;
    TCanvas* c1;
    TCanvas* c2;
+   TH1F* h1;
+   TH1F* h2;
+   TH1F* hadc[MAX_N_CH];
+
    TTimer * timer;
    TTimer * timer2;
    Long_t fupdate_time;
@@ -45,6 +56,12 @@ private:
    TGStatusBar* statusbar;
 
    TGTextView * DAQstatusTextDialogs;
+
+   TGListBox * listBoxAssignedCh;
+   TList* fSelectedAssigedCh;
+   int fselectedch[MAX_N_CH];
+   int fnselectedch;
+   TLegend* fC1LegendOverlay;
 
    char buf[500];
 public:
@@ -67,6 +84,11 @@ public:
    void SetTimer();
    void SetRateCalTime();
    void AssignChannel();
+   void ClearC1();
+   void ClearC2();
+   void PlotSpectra();
+   void OverlaySpectra();
+
    ClassDef (MyMainFrame,0);
 };
 

@@ -78,18 +78,6 @@ int pinit()
     h2 = new TH2F ( "h2","All channels: E vs ch",MAX_N_CH,0,MAX_N_CH,5000, 0, 5000);
 
     mf=new MyMainFrame(gClient->GetRoot(),200,200);
-    mf->GetC1()->Divide(N_CH_PLOT_H,N_CH_PLOT_V);
-    for (Int_t i=0;i<N_CH_PLOT;i++){
-        mf->GetC1()->cd(i+1);
-        hadc[i]->Draw();
-    }
-
-    mf->GetC2()->Divide(1,2);
-    mf->GetC2()->cd(1);
-    h1->SetFillColor(2);
-    h1->Draw();
-    mf->GetC2()->cd(2);
-    h2->Draw("colz");
 
     return 0;
 }
@@ -98,6 +86,9 @@ int process_event (Event * e)
 {
     Packet *tdcp = e->getPacket(TDC_PACKET);
     if(tdcp){
+#ifdef SLOW_ONLINE
+        usleep(SLOW_ONLINE);
+#endif
         int* temp;
         int* gg;
         gg=(int*) tdcp->getIntArray(temp);
