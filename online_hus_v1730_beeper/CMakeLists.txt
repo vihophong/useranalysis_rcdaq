@@ -2,7 +2,7 @@
 
 # CMakeLists.txt for event package. It creates a library with dictionary and a main program
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
-project(onlineV785)
+project(onlineV1730_beeper)
 
 # You need to tell CMake where to find the ROOT installation. This can be done in a number of ways:
 #   - ROOT built with classic configure/make use the provided $ROOTSYS/etc/cmake/FindROOT.cmake
@@ -26,13 +26,9 @@ file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.h)
 link_directories($ENV{ONLINE_MAIN}/lib)
 
 #---Create a shared library with geneated dictionary
-ROOT_GENERATE_DICTIONARY(G__mainframe ${PROJECT_SOURCE_DIR}/include/MyMainFrame.h LINKDEF ${PROJECT_SOURCE_DIR}/include/MyMainFrameLinkDef.hh)
-add_library(mainframe SHARED ${PROJECT_SOURCE_DIR}/src/MyMainFrame.cc ${PROJECT_SOURCE_DIR}/include/MyMainFrame.h  G__mainframe.cxx)
-target_link_libraries(mainframe ${ROOT_LIBRARIES})
 
-ROOT_GENERATE_DICTIONARY(G__myanalysis ${PROJECT_SOURCE_DIR}/include/myanalysis.h LINKDEF ${PROJECT_SOURCE_DIR}/include/myanalysisLinkDef.hh)
-add_library(myanalysis SHARED ${PROJECT_SOURCE_DIR}/src/myanalysis.cc ${headers}  G__myanalysis.cxx)
-target_link_libraries(myanalysis mainframe)
+ROOT_GENERATE_DICTIONARY(G__myanalysis ${PROJECT_SOURCE_DIR}/include/pdecoder.h LINKDEF ${PROJECT_SOURCE_DIR}/include/pdecoderLinkDef.h)
+add_library(myanalysis SHARED ${sources} ${headers}  G__myanalysis.cxx)
 target_link_libraries(myanalysis pmonitor Event NoRootEvent message)
 
 

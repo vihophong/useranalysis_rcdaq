@@ -189,18 +189,18 @@ double dpp::cfdSlow()
   delete sp;
   return fine_cfd;
 }
-double* dpp::getInp(int pNum)
-{
-  double fine_cfd[pNum];
-  ip=new TSpline3("Cubic Spline",icfd,cfd_ret,nsize,"b2e2",0,0);
-  double x=0;
-  for (int i=0;i<pNum;i++){
-    x+=(double)nsize/(double)pNum;
-    fine_cfd[i]=ip->Eval(x);
-  }
-  delete ip;
-  return fine_cfd;
-}
+//double* dpp::getInp(int pNum)
+//{
+//  double fine_cfd[pNum];
+//  ip=new TSpline3("Cubic Spline",icfd,cfd_ret,nsize,"b2e2",0,0);
+//  double x=0;
+//  for (int i=0;i<pNum;i++){
+//    x+=(double)nsize/(double)pNum;
+//    fine_cfd[i]=ip->Eval(x);
+//  }
+//  delete ip;
+//  return fine_cfd;
+//}
 //----- Leading edge discrimination with pulse size correction (run after make
 double dpp::ledWithCorr(int minthres)
 {
@@ -222,10 +222,8 @@ double  dpp::led(int threshold)
 {
   double fine_led=0;
   double h,l;
-  if (pulsePolarity==1) bL=16384-bL;
-//cout<<endl;
-  for (int i=0;i<nsize;i++){
-    //cout<<i<<" "<<pulse[i]<<endl;
+  if (pulsePolarity==1) bL=16384-bL;  
+  for (int i=0;i<nsize;i++){    
     if (pulsePolarity==1) pulse[i]=16384-pulse[i];
     if ((bL-pulse[i]>threshold)&&(i>0)){
       h=(double)(bL-pulse[i]-threshold);
@@ -234,7 +232,6 @@ double  dpp::led(int threshold)
       break;
     }
   }
-//cout<<endl;
   return fine_led;
 }
 int dpp::maxfind(int nsamp) //work only for positive

@@ -5,4 +5,5 @@
 #pragma link C++ class NIGIRI+;
 #pragma link C++ class NIGIRIHit+;
 #pragma link C++ class TDCHit+;
+#pragma link C++ class v1730event+;
 #endif

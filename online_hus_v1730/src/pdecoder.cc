@@ -2,233 +2,162 @@
 /* ************************ DO NOT REMOVE  ****************************** */
 #include <iostream>
 #include <pmonitor/pmonitor.h>
-#include <TSystem.h>
-#include <TROOT.h>
 #include "pdecoder.h"
+
 #include <dpp.h>
 #include <libDataStruct.h>
-//#include <DataStruct_dict.C>
+#include <bitset>
+#include <stdint.h>
+#include <vector>
+#include <map>
 
-#define DGTZ_CLK_RES 8
-#define V1730_EVENT_TYPE 1
-#define V1740_EVENT_TYPE 2
-#define TDC_EVENT_TYPE 3
-
-#define V1730_N_MAX_BOARD 5
-#define V1730_N_MAX_CH 16
-#define N_MAX_INFO 9
-
-#define TDC_BOARD_N 50
-#define TDC_PACKET 10
-#define TDC_N_CH 64
-
-#define V1740_BOARD_N 1
-#define V1740_HDR 6
-#define V1740_N_CH 8
-#define V1740_PACKET 11
-#define V1740_N_MAX_CH 8
-#define NSBL 8
-// 5000000 - 15 % memory = 1.2 Gb
-
-/* ********************************************************************** */
-
+#include <TSystem.h>
+#include <TROOT.h>
 #include <TH1.h>
 #include <TH2.h>
 #include <TFile.h>
 #include <TTree.h>
 #include <TString.h>
-#include <vector>
-#include <map>
 #include <TCanvas.h>
+
+#include <iostream>
+#include <fstream>
+
+#include <MyMainFrame.h>
+//#include <DataStruct_dict.C>
+
+#define SLOW_ONLINE 10000
+
+#define V1730_TRIGGER_CLOCK_RESO 8
+#define V1730_EVENT_TYPE 1
+#define V1730_N_CH 8
+#define V1730_MAX_N_CH 8
+#define V1730_PACKET 52
+#define NSBL 8
 
 #define N_REFESH_WF 1000
 #define N_MAX_WF_LENGTH 500
 
-#define COUNTS_TO_DISPLAY 10000
-#define COUNTS_TO_CAL 5000
-#define MAX_N_SAMPLE 500
-
-#define MAX_MAP_LENGTH 2000000
-
 using namespace std;
 
-//counter
-//Int_t dgtz_clong[V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH];
-int trgcnt_prev;
-int its;
-long long ts_prev;
-
-int dgtzcnt_prev[V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH];
-long long dgtzts_prev[V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH];
-int tdccnt_prev[TDC_N_CH];
-long long tdcts_prev[TDC_N_CH];
-
 //! histograms and trees
-TH2F *h2;
-TH1F *h1wf[V1730_N_MAX_BOARD][V1730_N_MAX_CH];
-TH2F *h2wf[V1730_N_MAX_BOARD][V1730_N_MAX_CH];
-TH1F *htdc;
+TH2F *ht2d;
+TH2F *he2d;
 
-TH1F *h3wf[V1740_N_MAX_CH];
-TH2F *h4wf[V1740_N_MAX_CH];
-TH2F *h5;
+TH1F *hwf1d[V1730_N_CH];
+TH2F *hwf2d[V1730_N_CH];
 
-TH2F *h6;
+TH1F *hrate;
+TH1F *hratetmp;
+TH1F *hratetmpscale;
 
-TH1F *hratedgtz;
+TH1F *ht0_t2;
 
-TH1F *htrgrateintegrate;
+MyMainFrame* mf;
 
-TH1F* probe1;
-TH1F* probe2;
+Int_t ch_thr[V1730_MAX_N_CH];
+Int_t ch_ecal0[V1730_MAX_N_CH];
+Int_t ch_ecal1[V1730_MAX_N_CH];
 
-TH1F* bc1l;
-TH1F* bc1r;
-TH1F* bc2l;
-TH1F* bc2r;
+ULong64_t ts_begin[V1730_MAX_N_CH];
 
-
-void Init(){
-    htrgrateintegrate = new TH1F("rate","rate",1000,0,1000);
-    //h2 = new TH2F("e2d","Energy Spectra 2D",V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH+TDC_N_CH,0,V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH+TDC_N_CH,400,0,100000);
-    h2 = new TH2F("e2d","Energy Spectra 2D",V1740_N_CH,0,V1740_N_CH,500,0,500);
-    h5 = new TH2F("e2d740","Energy Spectra 2D",V1740_N_CH,0,V1740_N_CH,2000,0,2000);
-    for (Int_t i=0;i<V1730_N_MAX_BOARD;i++){
-        for (Int_t j=0;j<V1730_N_MAX_CH;j++){
-            h1wf[i][j] = new TH1F (Form("wf1d_%d_%d",i,j),Form("Waveform 1d %d_%d",i,j), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH );
-            h2wf[i][j] = new TH2F (Form("wf2d_%d_%d",i,j),Form("Waveform 2d %d_%d",i,j), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH, 1700, 0,17000 );
-        }
-    }
-    for (int i=0;i<V1740_N_MAX_CH;i++){
-    h3wf[i] = new TH1F (Form("wf740_1d_%d",i),Form("Waveform 1d v1740 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH );
-    h4wf[i] = new TH2F (Form("wf740_2d_%d",i),Form("Waveform 2d v1740 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH, 1700, 0,17000 );
-    }
-    htdc = new TH1F("htdc","htdc",TDC_N_CH,0,TDC_N_CH);
-    for (int i=0;i<TDC_N_CH;i++){
-      tdccnt_prev[i]=0;
-      tdcts_prev[i]=0;
-    }
-    for (int i=0;i<V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH;i++){
-    dgtzcnt_prev[i] = 0;
-    dgtzts_prev[i] = 0;
-
+void Init(){    
+    std::ifstream inpf("channel_calib.txt");
+    if (inpf.fail()){
+        cout<<"No Configuration table is given"<<endl;
+        return;
     }
 
-    trgcnt_prev=0;
-    ts_prev = 0;
-    its = 0;
+    cout<<"Start reading calibration table channel_calib.txt"<<endl;
+    Int_t channel;
+    Double_t threshold,ecal0,ecal1;
+    Int_t mm=0;
 
-    hratedgtz=new TH1F("ratedgtz","ratedgtz",V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH,0,V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH);
+    while (inpf.good()){
+        inpf>>channel>>threshold>>ecal0>>ecal1;
+        cout<<channel<<"-"<<threshold<<"-"<<ecal0<<"-"<<ecal1<<endl;
+        ch_ecal0[channel]=ecal0;
+        ch_ecal1[channel]=ecal1;
+        ch_thr[channel]=threshold;
+        mm++;
+    }
 
-    probe1=new TH1F("cp","cp",200,0,10000);
-    probe2=new TH1F("kyto","kyoto",200,0,10000);
-    bc1l=new TH1F("bc1l","bc1l",200,0,50000);
-    bc1r=new TH1F("bc1r","bc1r",200,0,50000);
-    bc2l=new TH1F("bc2l","bc2l",200,0,50000);
-    bc2r=new TH1F("bc2r","bc2r",200,0,50000);
+
+    ht2d = new TH2F("t2d","Time Spectra 2D",V1730_N_CH,0,V1730_N_CH,550,0,550);
+    he2d = new TH2F("e2d","Energy Spectra 2D",V1730_N_CH,0,V1730_N_CH,2000,0,40000);
+    for (int i=0;i<V1730_N_CH;i++){
+        hwf1d[i] = new TH1F (Form("wf1730_1d_%d",i),Form("Waveform 1d v1730 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH );
+        hwf2d[i] = new TH2F (Form("wf1730_2d_%d",i),Form("Waveform 2d v1730 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH, 1700, 0,17000 );
+        ts_begin[i]=0;
+    }
+    hrate=new TH1F("hrate","hrate",V1730_N_CH,0,V1730_N_CH);
+    hratetmp=new TH1F("hratetmp","hratetmp",V1730_N_CH,0,V1730_N_CH);
+    hratetmpscale=new TH1F("hratetmpscale","hratetmpscale",V1730_N_CH,0,V1730_N_CH);
+
+    ht0_t2 = new TH1F("ht0_t2","Time correlation T0-T2 (ns)",500,-20,20);
+
+    mf=new MyMainFrame(gClient->GetRoot(),200,200);
+    mf->GetConfig();
+    mf->InitHistograms();
+    mf->DrawFrameCanvas();
+
 }
 
-void ProcessEvent(NIGIRIHit* data){
+void ProcessSingleEvent(NIGIRIHit* data){
     if (data->evt_type == V1730_EVENT_TYPE){
-        int b = data->b;
         int ch  = data->ch;
+        ULong64_t ts = data->ts;
+
+        //! stuff for rate calculation
+        //if (data->clong>ch_thr[ch]){
+            if (mf->GetFlagRateUpdate(ch)){
+                ts_begin[ch]=ts;
+            }
+            mf->ResetFlagRateUpdate(ch);
+            Double_t ts_s=((Double_t)((Long64_t)ts-(Long64_t)ts_begin[ch]))/1e9*V1730_TRIGGER_CLOCK_RESO;
+
+            hratetmp->Fill(ch);
+            hratetmpscale->SetBinContent(ch+1,ts_s);
+        //}
+        //!----------------------------
+
         int itcnt=0;
-    if (data->clong>0) h2->Fill(b*V1730_N_MAX_CH+ch,data->clong);
-    if (b==2&&ch==11) probe1->Fill(data->clong);
-    if (b==2&&ch==12) probe2->Fill(data->clong);
-    if (data->clong>0&&b==2&&ch==4) bc1l->Fill(data->clong);
-    if (data->clong>0&&b==2&&ch==5) bc1r->Fill(data->clong);
-    if (data->clong>0&&b==2&&ch==6) bc2l->Fill(data->clong);
-    if (data->clong>0&&b==2&&ch==7) bc2r->Fill(data->clong);
+        if (data->clong>ch_thr[ch]){
+            double ecal=data->clong*ch_ecal1[ch]+ch_ecal0[ch];
+            he2d->Fill(ch,ecal);
+            ht2d->Fill(ch,data->finets);
+        }        
         for (std::vector<UShort_t>::iterator it = data->pulse.begin() ; it != data->pulse.end(); ++it){
             if (itcnt<N_MAX_WF_LENGTH){
-          if (data->clong>0) h1wf[b][ch]->SetBinContent(itcnt+1,*it);
-                h2wf[b][ch]->Fill(itcnt,*it);
+                hwf2d[ch]->Fill(itcnt,*it);
+                hwf1d[ch]->SetBinContent(itcnt+1,*it);
             }
             itcnt++;
         }
-    }else if (data->evt_type == V1740_EVENT_TYPE){
-        int b = data->b;
-        int ch  = (b-V1740_BOARD_N)*V1730_N_MAX_CH + data->ch;
-//cout<<(b-V1740_BOARD_N)*V1730_N_MAX_CH + data->ch<<endl;
-        int itcnt=0;
-    if (data->clong>0) {h5->Fill(ch,data->clong);h2->Fill(ch,data->finets);}
-    for (std::vector<UShort_t>::iterator it = data->pulse.begin() ; it != data->pulse.end(); ++it){
-            if (itcnt<N_MAX_WF_LENGTH){
-                h4wf[ch]->Fill(itcnt,*it);
-                h3wf[ch]->SetBinContent(itcnt+1,*it);
-            }
-            itcnt++;
-        }
-    }else if (data->evt_type == TDC_EVENT_TYPE){
-      for (std::vector<UShort_t>::iterator it = data->tdc_ch.begin() ; it != data->tdc_ch.end(); ++it){
-    htdc->Fill(*it);
-    h2->Fill(*it+V1730_N_MAX_BOARD*V1730_N_MAX_CH+V1740_N_CH,25000);
-    //! tdc counter, rate metter
-      }
-      if (((data->evt-trgcnt_prev)>COUNTS_TO_CAL==0)){
-    double tdiff= (double)((long long)data->ts - (long long)ts_prev)/1e10;
-    double rate = (double)(data->evt-trgcnt_prev)/tdiff;//cps
-    if (ts_prev>0){
-       htrgrateintegrate->SetBinContent(its+1,rate);
-       its++;
-       if (its>1000) {
-        htrgrateintegrate->Reset();
-        its = 0;
-       }
-    }
-        ts_prev = (long long) data->ts;
-    trgcnt_prev = (int)data->evt;
-      }
-
-
     }else{
         cout<<"ERROR! @.@"<<endl;
     }
-    //! digitizer counter rate meter
-    if (data->evt_type != TDC_EVENT_TYPE){
-        int ich =data->b*V1730_N_MAX_CH+data->ch;
-        if (dgtzcnt_prev[ich]%COUNTS_TO_CAL==0){
-        if (dgtzcnt_prev[ich]>0){
-           double rate=((double)(data->evt-dgtzcnt_prev[ich]))/((double)(data->ts-dgtzts_prev[ich]))/DGTZ_CLK_RES*1e9;
-           hratedgtz->SetBinContent(ich+1,rate);
-        }
-        dgtzts_prev[ich] = data->ts;
-        dgtzcnt_prev[ich] = data->evt;
-        }
-    }
-
-
 }
 
 void CloseMe(){
 
 }
 
-
 //!------------**********************
 //! //!------------**********************
 //! //!------------**********************
 //! //!------------**********************
-//! //!------------**********************
-//! //!------------**********************
-//! //!------------**********************
 
-#include <stdint.h>
-
+//! DPP parameters
 int CFD_delay=1;//in Tclk unit, 1 Tclk=2ns
 double CFD_fraction=0.5;
 double LED_threshold=100;
-double LED_threshold_LED=100;
-double LED_threshold_740=40;
-double LED_threshold_LED_740=40;
 int gateOffset=10;
 int shortGate=20;
 int longGate=150;
 int nBaseline=16;
 int minVarBaseline=100; //criteria for baseline determination
-int mode_selection=0;
-
+int mode_selection=2;
 
 //! dont care about the following code
 uint16_t seperateint(int inint,bool islsb){
@@ -237,8 +166,10 @@ uint16_t seperateint(int inint,bool islsb){
 }
 
 NIGIRIHit* data;
-
 int init_done = 0;
+int n_v1730;
+v1730event v1730evt;
+
 int pinit()
 {
   if (init_done) return 1;
@@ -246,92 +177,108 @@ int pinit()
   gROOT->ProcessLine(".L libDataStruct.so");
   data = new NIGIRIHit;
   Init();
+
+  n_v1730=0;
   return 0;
 }
 
 int process_event (Event * e)
 {
-
-  //! v1740 packet
-  Packet *p1740=e->getPacket(V1740_PACKET);
-  if (p1740)
+    //! v1740 packet
+    Packet *p1730=e->getPacket(V1730_PACKET);
+    if (p1730)
     {
-      int* temp;
-      int* gg;
-      gg=(int*) p1740->getIntArray(temp);
-      int size=p1740->getPadding();
-      //! content
-      int k=V1740_HDR+V1740_N_MAX_CH;
-      for (int i=0;i<V1740_N_CH;i++){
-        //! header
-        data->Clear();
-        data->evt_type = V1740_EVENT_TYPE;
-        data->b = V1740_BOARD_N+i/V1730_N_MAX_CH;//for sorter
-        data->evt = gg[2]+1;//this event start from 0
-        data->overrange = (Char_t) gg[1];//intepret as channel(group) mask
-        UInt_t tslsb = (UInt_t)gg[5];
-        UInt_t tsmsb = (UInt_t)gg[4];
-        data->ts = (((ULong64_t)tsmsb<<32)&0xFFFF00000000)|(ULong64_t)tslsb;//resolution is 16 ns!
-        data->ch = i%V1730_N_MAX_CH;//for sorter
-
-        int nsample = gg[i+V1740_HDR];
-        data->nsample = nsample;
-        UShort_t WaveLine[nsample];
-
-        int ispl = 0;
-        for (int j=0;j<nsample/2+nsample%2;j++){
-          if (ispl<nsample) {
-              WaveLine[ispl]=gg[k]&0xFFFF;
-              data->pulse.push_back(gg[k]&0xFFFF);
-
-          }
-          ispl++;
-          if (ispl<nsample) {
-              WaveLine[ispl]=(gg[k]>>16)&0xFFFF;
-              data->pulse.push_back((gg[k]>>16)&0xFFFF);
-          }
-          ispl++;
-          k++;
-        }
-
-        if (nsample>NSBL){
-            dpp *oj=new dpp(nsample,WaveLine);
-            oj->baselineMean(nBaseline,minVarBaseline);
-            double timeData = 0;
-            int cShort,cLong;
-
-            if (mode_selection==0) {
-                timeData=oj->led(LED_threshold_LED_740);
-            }else if (mode_selection==1) {
-                timeData=oj->ledWithCorr(LED_threshold_740);
-            }else if (mode_selection==2){
-                oj->makeCFD(LED_threshold_740,CFD_delay,CFD_fraction);
-                timeData=oj->cfdFast();
-            }else if (mode_selection==3){
-                oj->makeCFD(LED_threshold_740,CFD_delay,CFD_fraction);
-                timeData=oj->cfdSlow();
+#ifdef SLOW_ONLINE
+        usleep(SLOW_ONLINE);
+#endif
+        n_v1730++;
+        int* tmp;
+        int* words;
+        words=(int*) p1730->getIntArray(tmp);
+        int nevt=p1730->getPadding();
+//        cout<<"\nProcessing events block"<<n_v1730<<" Number of Events="<<nevt<<endl;
+        int ipos=0;
+        for (int evt=0;evt<nevt;evt++){
+            v1730evt.Clear();
+            v1730evt.decode(words,ipos);
+//            v1730evt.Print();
+            ipos+=4;
+            //calculate sample length first
+            int nch=0;
+            for (int ch=0;ch<V1730_MAX_N_CH;ch++){
+                if (!(v1730evt.channel_mask & (1 << ch))) continue;
+                nch++;
             }
+            int nsamples_per_ch = (v1730evt.event_size-4)*2/nch;
+//            cout<<"nsamples_per_ch = "<<nsamples_per_ch<<endl;
+            //loop all channel with given sample length
+            double t_ch0=0;
+            double t_ch2=0;
+            for (int ch=0;ch<V1730_MAX_N_CH;ch++){
+                if (!(v1730evt.channel_mask & (1 << ch))) continue;
+                data->Clear();
+                data->evt_type = V1730_EVENT_TYPE;
+                data->b = 0;//for sorter
+                data->evt = v1730evt.event_counter;
+                data->ts = v1730evt.trigger_time_tag_extended;
+                data->ch = ch;//for sorter
+                data->nsample = nsamples_per_ch;
+                int isample=0;
+                UShort_t WaveLine[data->nsample];
+                for (int i=0;i<nsamples_per_ch/2;i++){
+                    unsigned short sample0=words[ipos]&0x7FFF;
+                    unsigned short sample1=(words[ipos]>>16)&0x7FFF;
+//                    cout<<"sample "<<isample<<" = "<<sample0<<endl;
+                    WaveLine[isample]=sample0;
+                    isample++;
+//                    cout<<"sample "<<isample<<" = "<<sample1<<endl;
+                    WaveLine[isample]=sample1;
+                    isample++;
+                    data->pulse.push_back(sample0);//lsb                    
+                    data->pulse.push_back(sample1);//msb
+                    ipos++;
+                }
+                //analyze data
+                if (data->nsample>NSBL){
+                    dpp *oj=new dpp(data->nsample,WaveLine);
+                    oj->baselineMean(nBaseline,minVarBaseline);
+                    double timeData = 0;
+                    int cShort,cLong;
+                    if (mode_selection==0) {
+                        timeData=oj->led(ch_thr[ch]);
+                        cout<<"ch"<<ch<<"- tsdata"<<timeData<<endl;
+                    }else if (mode_selection==1) {
+                        timeData=oj->ledWithCorr(ch_thr[ch]);
+                    }else if (mode_selection==2){
+                        oj->makeCFD(ch_thr[ch],CFD_delay,CFD_fraction);
+                        timeData=oj->cfdFast();
+                    }else if (mode_selection==3){
+                        oj->makeCFD(ch_thr[ch],CFD_delay,CFD_fraction);
+                        timeData=oj->cfdSlow();
+                    }
 
-            //oj->chargeInter(cShort,cLong,timeData,gateOffset,shortGate,longGate);
-            data->cshort = 0;
-            data->clong = oj->maxAdcPos(N_MAX_WF_LENGTH)-oj->bL;
-            //cout<<cLong<<endl;
-            data->baseline = oj->bL;
-            data->finets = timeData;
-            delete oj;
-        }
-    ProcessEvent(data);
+                    oj->chargeInter(cShort,cLong,timeData,gateOffset,shortGate,longGate);
+                    data->cshort = cShort;
+                    data->clong = cLong;                    
+                    //data->cshort = 0;
+                    //data->clong = oj->maxAdcPos(N_MAX_WF_LENGTH)-oj->bL;
+                    //data->clong = oj->bL-oj->minAdcNeg(N_MAX_WF_LENGTH);
+                    data->baseline = oj->bL;
+                    data->finets = timeData;
 
-    /*
-      if (gg[2]==1000) {
-        for (int ii=0;ii<2;ii++) cout<<i<<" "<<nsample<<" "<<ii<<" "<<WaveLine[ii]<<endl;
-        for (int ii=nsample-3;ii<nsample;ii++) cout<<i<<" "<<nsample<<" "<<ii<<" "<<WaveLine[ii]<<endl;
-      }
-    */
-      }
-       delete p1740;
-  }
-  return 0;
+                    if (ch==0) t_ch0=timeData;
+                    if (ch==2) t_ch2=timeData;
+                    delete oj;
+                }//analyze data
+
+                ProcessSingleEvent(data);
+            }//end of channel loop
+            if (t_ch0>40&&t_ch2>40&&t_ch0<100&&t_ch2<100) ht0_t2->Fill((t_ch0-t_ch2)*2);
+
+        }//end of event loop
+        delete p1730;
+    }//end of packet loop
+    return 0;
 }
 
 int pclose(){
