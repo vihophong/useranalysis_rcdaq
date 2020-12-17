@@ -26,7 +26,7 @@
 #include <MyMainFrame.h>
 //#include <DataStruct_dict.C>
 
-#define SLOW_ONLINE 10000
+//#define SLOW_ONLINE 100000
 
 #define V1730_TRIGGER_CLOCK_RESO 8
 #define V1730_EVENT_TYPE 1
@@ -51,6 +51,8 @@ TH1F *hrate;
 TH1F *hratetmp;
 TH1F *hratetmpscale;
 
+TH1F *h_ts[V1730_N_CH];
+
 TH1F *ht0_t2;
 
 MyMainFrame* mf;
@@ -60,6 +62,8 @@ Int_t ch_ecal0[V1730_MAX_N_CH];
 Int_t ch_ecal1[V1730_MAX_N_CH];
 
 ULong64_t ts_begin[V1730_MAX_N_CH];
+
+ULong64_t ts_begin2[V1730_MAX_N_CH];
 
 void Init(){    
     std::ifstream inpf("channel_calib.txt");
@@ -82,12 +86,12 @@ void Init(){
         mm++;
     }
 
-
     ht2d = new TH2F("t2d","Time Spectra 2D",V1730_N_CH,0,V1730_N_CH,550,0,550);
     he2d = new TH2F("e2d","Energy Spectra 2D",V1730_N_CH,0,V1730_N_CH,2000,0,40000);
     for (int i=0;i<V1730_N_CH;i++){
         hwf1d[i] = new TH1F (Form("wf1730_1d_%d",i),Form("Waveform 1d v1730 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH );
         hwf2d[i] = new TH2F (Form("wf1730_2d_%d",i),Form("Waveform 2d v1730 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH, 1700, 0,17000 );
+        h_ts[i] = new TH1F (Form("hts1730_1d_%d",i),Form("HTS v1730 %d",i),3600,0,3600);
         ts_begin[i]=0;
     }
     hrate=new TH1F("hrate","hrate",V1730_N_CH,0,V1730_N_CH);
@@ -107,6 +111,8 @@ void ProcessSingleEvent(NIGIRIHit* data){
     if (data->evt_type == V1730_EVENT_TYPE){
         int ch  = data->ch;
         ULong64_t ts = data->ts;
+        Double_t ts_second = (Double_t)ts/1e9*V1730_TRIGGER_CLOCK_RESO;
+        h_ts[ch]->Fill(ts_second);
 
         //! stuff for rate calculation
         //if (data->clong>ch_thr[ch]){
@@ -218,11 +224,13 @@ int process_event (Event * e)
                 if (!(v1730evt.channel_mask & (1 << ch))) continue;
                 data->Clear();
                 data->evt_type = V1730_EVENT_TYPE;
+
                 data->b = 0;//for sorter
                 data->evt = v1730evt.event_counter;
                 data->ts = v1730evt.trigger_time_tag_extended;
-                data->ch = ch;//for sorter
+                data->ch = ch;//for sorter                
                 data->nsample = nsamples_per_ch;
+                /*
                 int isample=0;
                 UShort_t WaveLine[data->nsample];
                 for (int i=0;i<nsamples_per_ch/2;i++){
@@ -266,14 +274,16 @@ int process_event (Event * e)
                     data->baseline = oj->bL;
                     data->finets = timeData;
 
-                    if (ch==0) t_ch0=timeData;
-                    if (ch==2) t_ch2=timeData;
+                    if (ch==0) {t_ch0=timeData;}//cout<<"t_ch0 = "<<t_ch0<<endl;}
+		    
+                    if (ch==2&&timeData>0) {t_ch2=timeData;}//cout<<"t_ch2 = "<<t_ch2<<endl;}
+
                     delete oj;
                 }//analyze data
-
+                */
                 ProcessSingleEvent(data);
             }//end of channel loop
-            if (t_ch0>40&&t_ch2>40&&t_ch0<100&&t_ch2<100) ht0_t2->Fill((t_ch0-t_ch2)*2);
+            if (t_ch0>40&&t_ch2>40&&t_ch0<250&&t_ch2<250) ht0_t2->Fill((t_ch0-t_ch2)*2);
 
         }//end of event loop
         delete p1730;
