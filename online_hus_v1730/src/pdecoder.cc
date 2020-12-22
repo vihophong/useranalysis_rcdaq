@@ -93,6 +93,7 @@ void Init(){
         hwf2d[i] = new TH2F (Form("wf1730_2d_%d",i),Form("Waveform 2d v1730 %d",i), N_MAX_WF_LENGTH, 0,N_MAX_WF_LENGTH, 1700, 0,17000 );
         h_ts[i] = new TH1F (Form("hts1730_1d_%d",i),Form("HTS v1730 %d",i),3600,0,3600);
         ts_begin[i]=0;
+        ts_begin2[i]=0;
     }
     hrate=new TH1F("hrate","hrate",V1730_N_CH,0,V1730_N_CH);
     hratetmp=new TH1F("hratetmp","hratetmp",V1730_N_CH,0,V1730_N_CH);
@@ -110,12 +111,11 @@ void Init(){
 void ProcessSingleEvent(NIGIRIHit* data){
     if (data->evt_type == V1730_EVENT_TYPE){
         int ch  = data->ch;
-        ULong64_t ts = data->ts;
-        Double_t ts_second = (Double_t)ts/1e9*V1730_TRIGGER_CLOCK_RESO;
+        unsigned long long ts = data->ts;
+        Double_t ts_second = ((Double_t)ts)/1e9*V1730_TRIGGER_CLOCK_RESO;
         h_ts[ch]->Fill(ts_second);
-
         //! stuff for rate calculation
-        //if (data->clong>ch_thr[ch]){
+        if (data->clong>ch_thr[ch]){
             if (mf->GetFlagRateUpdate(ch)){
                 ts_begin[ch]=ts;
             }
@@ -124,7 +124,7 @@ void ProcessSingleEvent(NIGIRIHit* data){
 
             hratetmp->Fill(ch);
             hratetmpscale->SetBinContent(ch+1,ts_s);
-        //}
+        }
         //!----------------------------
 
         int itcnt=0;
@@ -230,7 +230,7 @@ int process_event (Event * e)
                 data->ts = v1730evt.trigger_time_tag_extended;
                 data->ch = ch;//for sorter                
                 data->nsample = nsamples_per_ch;
-                /*
+
                 int isample=0;
                 UShort_t WaveLine[data->nsample];
                 for (int i=0;i<nsamples_per_ch/2;i++){
@@ -279,8 +279,7 @@ int process_event (Event * e)
                     if (ch==2&&timeData>0) {t_ch2=timeData;}//cout<<"t_ch2 = "<<t_ch2<<endl;}
 
                     delete oj;
-                }//analyze data
-                */
+                }//analyze data                
                 ProcessSingleEvent(data);
             }//end of channel loop
             if (t_ch0>40&&t_ch2>40&&t_ch0<250&&t_ch2<250) ht0_t2->Fill((t_ch0-t_ch2)*2);
